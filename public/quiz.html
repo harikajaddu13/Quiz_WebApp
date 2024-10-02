@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tri-Quiz-Via</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #f0f0f0; /* Light Gray */
+        }
+
+        #header-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #quiz-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db; /* Blue */
+            margin-right: auto;
+        }
+
+        #score-container, #timer-container {
+            background-color: #3498db; /* Blue */
+            color: #fff; /* White */
+            padding: 10px;
+            border-radius: 10px;
+            margin: 0 10px; /* Add margin around both score and timer */
+            font-size: 20px;
+        }
+
+        #quiz-container {
+            max-width: 600px;
+            margin: auto;
+            background-color: #ecf0f1; /* Silver */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #question-container {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #options-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .option {
+            padding: 15px;
+            border: 2px solid #3498db; /* Blue */
+            background-color: #fff;
+            color: #333;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .option:hover {
+            background-color: #3498db;
+            color: #fff;
+        }
+
+        .correct-answer {
+            background-color: #2ecc71; /* Emerald Green */
+            color: #333;
+        }
+
+        .incorrect-answer {
+            background-color: #e74c3c; /* Alizarin Red */
+            color: #333;
+        }
+
+        #progress-container {
+            margin-top: 20px;
+            color: #666;
+            font-size: 16px;
+        }
+
+        #loader {
+            border: 8px solid #bdc3c7; /* Silver Sand */
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        #final-score-container {
+            margin-top: 20px;
+            font-size: 20px;
+            color: #333;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header-container">
+        <div id="quiz-name">Tri-Quiz-Via</div>
+        <div id="score-container">Score: 0</div>
+        <div id="timer-container">Time left: 5 seconds</div> <!-- Timer display -->
+    </div>
+    
+    <div id="quiz-container">
+        <div id="loader"></div>
+        <div id="question-container"></div>
+        <div id="options-container"></div>
+        <div id="progress-container"></div>
+        <div id="final-score-container"></div>
+    </div>
+
+    <script>
+        const scoreContainer = document.getElementById('score-container');
+        const quizNameContainer = document.getElementById('quiz-name');
+        const quizContainer = document.getElementById('quiz-container');
+        const questionContainer = document.getElementById('question-container');
+        const optionsContainer = document.getElementById('options-container');
+        const progressContainer = document.getElementById('progress-container');
+        const loader = document.getElementById('loader');
+        const finalScoreContainer = document.getElementById('final-score-container');
+        const timerContainer = document.getElementById('timer-container'); // Timer display
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let questions = [];
+        let timeLeft = 5; // Time in seconds
+        let timer; // Timer variable
+
+        // Fetch trivia questions from static JSON file
+        async function fetchQuestions() {
+            const response = await fetch('uploadedQuestions.json'); // Path to your JSON file
+            const data = await response.json();
+            // Shuffle the questions and select the first 5
+            questions = shuffleArray(data.results).slice(0, 5);
+            showQuestion();
+        }
+
+        // Shuffle array function
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // Function to start the timer
+        function startTimer() {
+            timer = setInterval(() => {
+                timeLeft--;
+                if (timeLeft >= 0) {
+                    timerContainer.textContent = `Time left: ${timeLeft} seconds`;
+                } else {
+                    clearInterval(timer); // Clear the timer
+                    checkAnswer('', '', true); // Auto-select incorrect answer due to timeout
+                }
+            }, 1000); // Update every second
+        }
+
+        // Function to reset the timer
+        function resetTimer() {
+            clearInterval(timer); // Clear existing timer
+            timeLeft = 5; // Reset time left
+            timerContainer.textContent = `Time left: ${timeLeft} seconds`; // Update timer display
+        }
+
+        // Function to show question
+        function showQuestion() {
+            resetTimer(); // Reset timer before showing new question
+            
+            const currentQuestion = questions[currentQuestionIndex];
+            questionContainer.innerHTML = currentQuestion.question;
+
+            optionsContainer.innerHTML = '';
+            const allOptions = [...currentQuestion.incorrect_answers, currentQuestion.correct_answer];
+            allOptions.sort(() => Math.random() - 0.5); // Shuffle options
+
+            allOptions.forEach((option, index) => {
+                const optionElement = document.createElement('div');
+                optionElement.classList.add('option');
+                optionElement.innerHTML = option;
+                optionElement.addEventListener('click', () => checkAnswer(option, currentQuestion.correct_answer));
+                optionsContainer.appendChild(optionElement);
+            });
+
+            loader.style.display = 'none';
+            quizContainer.style.display = 'block';
+            updateProgress();
+            
+            startTimer(); // Start timer for new question
+        }
+
+        function checkAnswer(selectedOption, correctAnswer, timedOut = false) {
+    resetTimer(); // Reset timer when answer is selected or timed out
+    
+    optionsContainer.innerHTML = ''; // Clear previous options
+
+    const isCorrect = selectedOption === correctAnswer && !timedOut;
+
+    if (selectedOption) {
+        const selectedOptionElement = document.createElement('div');
+        selectedOptionElement.classList.add('option', isCorrect ? 'correct-answer' : 'incorrect-answer');
+        selectedOptionElement.innerHTML = selectedOption;
+        optionsContainer.appendChild(selectedOptionElement);
+    }
+
+    if (!selectedOption && timedOut) {
+        // Fetch the correct answer from the current question object
+        const currentQuestion = questions[currentQuestionIndex];
+        const correctAnswerFromExcel = currentQuestion.correct_answer;
+
+        const correctOptionElement = document.createElement('div');
+        correctOptionElement.classList.add('option', 'correct-answer', 'timeout');
+        correctOptionElement.innerHTML = `${correctAnswerFromExcel}`;
+        optionsContainer.appendChild(correctOptionElement);
+    }
+
+    if (!isCorrect && !timedOut && selectedOption) {
+        const correctOptionElement = document.createElement('div');
+        correctOptionElement.classList.add('option', 'correct-answer');
+        correctOptionElement.innerHTML = `${correctAnswer}`;
+        optionsContainer.appendChild(correctOptionElement);
+    }
+
+    if (isCorrect) {
+        score++;
+    }
+
+    setTimeout(() => {
+        currentQuestionIndex++;
+        if (currentQuestionIndex < questions.length) {
+            showQuestion();
+        } else {
+            endQuiz();
+        }
+    }, 1500); // Delay for 1.5 seconds before proceeding to the next question
+
+    updateScore();
+}
+
+        // Function to update progress
+        function updateProgress() {
+            progressContainer.innerHTML = `Question ${currentQuestionIndex + 1}/${questions.length}`;
+        }
+
+        // Function to update score
+        function updateScore() {
+            scoreContainer.innerHTML = `Score: ${score}`;
+        }
+
+        // Function to end the quiz
+      
+function endQuiz() {
+    // Stop the timer if it's still running
+    clearInterval(timer);
+
+    // Calculate the quiz duration (assuming each question takes 5 seconds)
+    const quizDuration = (currentQuestionIndex + 1) * 5;
+
+    // Prepare data to send
+    const dataToSend = {
+        score: score,
+        startTime: new Date().toISOString(), // Current time in ISO format
+        currentQuestionIndex: currentQuestionIndex,
+        quizDuration: quizDuration // Duration of the quiz in seconds
+    };
+
+    // Send data to /endQuiz route
+    fetch('/endQuiz', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSend),
+    })
+    .then(response => response.text())
+    .then(data => {
+        console.log(data); // Log the response from the server
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+    });
+
+    // Hide the quiz container and display the final score
+    quizContainer.style.display = 'none';
+    finalScoreContainer.innerHTML = `Your Final Score: ${score}/${questions.length}`;
+    localStorage.setItem('highScore', score);
+
+    // Redirect to the final result page
+    window.location.href = 'final.html';
+}
+
+
+        // Fetch questions and start the quiz
+        fetchQuestions();
+    </script>
+
+</body>
+</html>
+
